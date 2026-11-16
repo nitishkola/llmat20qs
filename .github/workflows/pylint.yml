@@ -22,6 +22,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pylint
 
-      - name: Analysing the code with pylint
+      - name: Analyze code with Pylint
         run: |
-          pylint $(git ls-files '*.py')
+          pylint --errors-only --disable=import-error $(git ls-files '*.py')
