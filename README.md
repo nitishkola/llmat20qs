@@ -26,6 +26,27 @@ The default cohort has four models, three fixed target concepts, and one game pe
 
 The notebook, `Abstract.ipynb`, contains the two preflight workflows. On Stony Brook's AI3 cluster, follow its access and SLURM guidance and run scripts as scheduled jobs rather than running notebooks on the server.
 
+## Run on Stony Brook AI3
+
+The cluster provides a CUDA-enabled PyTorch environment as the `pytorch-cuda12` module, including `transformers` and `accelerate`. Create a user-owned environment for the remaining dependency once, on a login node:
+
+```bash
+module load pytorch-cuda12
+mkdir -p "$HOME/.venvs"
+python -m venv --system-site-packages "$HOME/.venvs/llmat20qs"
+source "$HOME/.venvs/llmat20qs/bin/activate"
+python -m pip install openai
+```
+
+From the repository root, prepare output directories and submit the example GPU job:
+
+```bash
+mkdir -p logs results
+sbatch run_pilot.job
+```
+
+The job requests one GPU, four CPUs, and 30 GB of system memory, samples GPU utilization once per minute, and runs the default 48-game original cohort. Adjust the time and memory requests to cluster policy and measured runtime. Check status with `squeue -u "$USER"` and accounting with `sacct -u "$USER"`. Resubmit with the same results file to resume completed game IDs. The job requires an Ollama-compatible endpoint reachable from the compute node; configure `OLLAMA_BASE_URL` and `OLLAMA_MODEL` if the defaults are not available there. Do not run this GPU job for `--mock` tests.
+
 ## Preliminary pilot results
 
 | Pilot output | Games | Wins | Invalid answer attempts / answer turns |
