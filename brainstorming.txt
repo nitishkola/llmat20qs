@@ -1,4 +1,17 @@
-How good are LLM at 20 questions?
+Project name: How good are LLMs at 20 questions?
+
+Professor:
+How Good Are LLMs at 20 Questions?
+
+In the game of 20 questions, one player selects a secret word or thing, which a second player must identify by asking a series of true/false questions.   The winner (guesser or questioner) is determined by failure or success after twenty questions.    LLMs are in principle capable of suggesting random-ish words, and asking/answering questions.    How good are they at 20 questions?   Getting two models to play 20 questions with each other will not be difficult: the interesting thing is to carefully evaluate what they are doing and how well they are doing it.
+
+A successful project here will convincingly evaluate different pairs of models against each other.   Perhaps this is done through an agent-type architecture, but I will want to see results of all possible pairs of at least four different LLM models, each playing the role of guesser and questioner against each other.
+Evaluation is a critical thing here.   You need to design and perform experiments which convincingly compare models in different roles, answering questions like:
+Do models perform better when the same model is used in both roles in different sessions, or is one model better than others in a particular role?
+How well do models do selecting words/concepts uniformly at random?   Compare them to a truly random generator for nouns, places, people, and general vocabulary worlds.
+How good are the questions the models ask?  In theory each question should try to half the space of remaining possibilities.
+How good are they at accurately answering questions about the hidden word?  The guesser can mislead the questioner by giving misleading answers, which is bad/cheating.
+There is previous work here.   Do a literature search on papers which have tried to evaluate models at 20 questions.   I will expect to see a research summary in your progress report.
 
 Brainstorming:
 
@@ -15,6 +28,33 @@ Here we need to generate data by making 4 models play among each other
 Limitations/Challenges:
 
 1. APIs are costly
-	a. Locally run llama models
+solution: Locally run llama models
+better solution: sorted out by running on stony brook AI cluster
 2. Which models should we choose? Can we take any random models?
-2. How to evaluate?
+solution: The weakest models may not be interesting enough to study: balance your ability to complete the experiments at low cost with their obtaining meaninful information
+3. How to evaluate?
+solution: Do statistical significance tests on the differences of the models
+
+Professor feedback:
+
+Total score: 19 / 28
+Scaled score: 82.0 / 100
+
+Project: How Good Are LLMs at 20 Questions?
+Group #: 7
+
+Scores (1-7 scale):
+- How much work did the team do? (4 = met expectation): 4
+- Does the team have a clear direction to proceed? (4 = clear enough): 5
+- Degree of innovation in the proposal (4 = average): 4
+- Degree of AI vs. humanity in the proposal (4 = reasonable collaboration): 6
+
+Three good things:
+(1) Preliminary experiments provide insight into several phases of the problem
+(2) There is a plan for experiments on how to proceed, and a longer plan of ideas which would be interesting if persued
+(3) Report felt human written
+
+Three things that can be improved:
+(1) The weakest models may not be interesting enough to study: balance your ability to complete the experiments at low cost with their obtaining meaninful information
+(2) Do statistical significance tests on the differences of the models
+(3) Do explore some of the future work ideas in your proposal, not just run bigger experiments.
