@@ -3,8 +3,9 @@
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 #SBATCH --time=00-02:00
-#SBATCH --mem=16000
-#SBATCH --cpus-per-task=2
+#SBATCH --mem=30000
+#SBATCH --cpus-per-task=4
+#SBATCH --nodelist=tesla1
 #SBATCH --gres=gpu:1
 
 set -euo pipefail
@@ -13,7 +14,7 @@ cd "$SLURM_SUBMIT_DIR"
 module load pytorch-cuda12
 source "$HOME/.venvs/llmat20qs/bin/activate"
 
-echo "GPU smoke game started on $(hostname) at $(date)"
+echo "GPU model smoke test started on $(hostname) at $(date)"
 nvidia-smi
 
 GPU_LOG="logs/gpu_usage-${SLURM_JOB_ID}.csv"
@@ -28,32 +29,7 @@ echo "timestamp,gpu_index,utilization_percent,memory_used_MB,memory_total_MB" > 
 GPU_MONITOR_PID=$!
 trap 'kill "$GPU_MONITOR_PID" 2>/dev/null || true' EXIT
 
-python - <<'PY'
-import json
-import os
-from pathlib import Path
+python -c 'import torch; assert torch.cuda.is_available(), "SLURM did not expose a GPU"; print(torch.cuda.get_device_name(0))'
+python twenty_questions_pilot.py --smoke-models
 
-import torch
-import twenty_questions_pilot as runner
-
-if not torch.cuda.is_available():
-    raise RuntimeError("SLURM did not expose a GPU to PyTorch")
-
-model = next(model for model in runner.MODELS if model.get("backend") == "transformers")
-print(f"Running one self-play game with {model['name']} on {torch.cuda.get_device_name(0)}")
-runner.prepare_hf_pair(model)
-game = runner.play(
-    model,
-    model,
-    "banana",
-    game_id=f"gpu-smoke-{os.environ['SLURM_JOB_ID']}|{model['name']}|banana",
-)
-
-output = Path(f"results/gpu-smoke-{os.environ['SLURM_JOB_ID']}.jsonl")
-with output.open("w", encoding="utf-8") as results:
-    results.write(json.dumps(game) + "\n")
-
-print(f"Saved one game ({game['turns_used']} turns; won={game['won']}) to {output}")
-PY
-
-echo "GPU smoke game finished at $(date)"
+echo "GPU model smoke test finished at $(date)"

@@ -1,11 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=20q-pilot
+#SBATCH --job-name=20q-tesla1
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 #SBATCH --time=00-08:00
 #SBATCH --mem=30000
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:1
+#SBATCH --nodelist=tesla1
+#SBATCH --gres=gpu:2
 
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
@@ -30,8 +31,7 @@ GPU_MONITOR_PID=$!
 trap 'kill "$GPU_MONITOR_PID" 2>/dev/null || true' EXIT
 
 python twenty_questions_pilot.py \
-    --model-set original \
     --repeats 1 \
-    --results-file results/original-pilot.jsonl
+    --results-file results/tesla1-qwen3-8b-gemma3-12b-mistral-nemo-granite33-r1.jsonl
 
 echo "Job finished at $(date)"

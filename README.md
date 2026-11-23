@@ -1,51 +1,74 @@
 # How Good Are LLMs at 20 Questions?
 
-This project studies how language models perform as both the answerer (who knows the secret) and the guesser (who asks questions and guesses) in 20 Questions. The Python runner supports local Hugging Face Transformers models and an Ollama-compatible local endpoint, and records turn-level JSONL logs. The checked-in pilot results are exploratory feasibility runs; they are not enough to rank models or establish general conclusions.
+This project studies language models in both roles of 20 Questions: the answerer, who knows the secret, and the guesser, who asks questions and guesses. `twenty_questions_pilot.py` runs a directed round robin, records turn-level JSONL logs, and validates that all scheduled pairings and targets were completed. Existing small-model pilot logs are exploratory and are not part of the current model cohort.
 
-## Run a game experiment
+## Selected model cohort
 
-Use Python with `torch`, `transformers`, `accelerate`, and `openai` installed. Install a PyTorch build suitable for your hardware, then install the remaining packages with:
+The runner uses only these four locally hosted, instruction-tuned Hugging Face models. Each checkpoint is pinned to a specific revision for reproducibility.
 
-```powershell
-python -m pip install transformers accelerate openai
+| Model | Hugging Face checkpoint | Revision |
+|---|---|---|
+| Qwen3 8B | `Qwen/Qwen3-8B` | `b968826d9c46dd6066d109eabc6255188de91218` |
+| Gemma 3 12B IT | `google/gemma-3-12b-it` | `96b6f1eccf38110c56df3a15bffe176da04bfd80` |
+| Mistral Nemo 12B Instruct | `mistralai/Mistral-Nemo-Instruct-2407` | `04d8a90549d23fc6bd7f642064003592df51e9b3` |
+| Granite 3.3 8B Instruct | `ibm-granite/granite-3.3-8b-instruct` | `51dd4bc2ade4059a6bd87649d68aa11e4fb2529b` |
+
+This cohort addresses the concern that the earlier 0.6B–3B pilot models may be too weak for meaningful comparisons, while avoiding the substantially larger 20B–31B candidates in the proposal draft. The models are from four different developers and use instruction tuning, supporting a more relevant role-by-role comparison. Their 8B–12B sizes are a practical compromise for Tesla1's 32 GB V100 GPUs. The runner uses FP16 on CUDA and assigns each distinct model in a pairing to its own GPU; the round-robin job therefore requests two GPUs.
+
+Gemma 3 is gated: accept Google's terms on the [Hugging Face model page](https://huggingface.co/google/gemma-3-12b-it), then authenticate on AI3 (for example, with `hf auth login`). Keep credentials in the Hugging Face user cache or a protected environment variable. Never put tokens in source, job files, or Git.
+
+## Local checks
+
+Use Python with `torch`, `transformers`, and `accelerate` installed. Install dependencies with:
+
+```bash
+python -m pip install -r requirements.txt
 ```
 
-For a quick pipeline check that does not load language models or call an API:
+Run a mock 48-game schedule without downloading models:
 
-```powershell
-python twenty_questions_pilot.py --mock --results-file mock_games.jsonl
+```bash
+python twenty_questions_pilot.py --mock --results-file /tmp/20q-mock.jsonl
+python twenty_questions_pilot.py --validate-only /tmp/20q-mock.jsonl --repeats 1
 ```
 
-For real inference, make sure the Ollama server and `llama3.1:8b` are available locally. Set `OLLAMA_BASE_URL` if the server is not at `http://localhost:11434/v1`; the runner defaults `OLLAMA_API_KEY` to `ollama` for the local endpoint. The Hugging Face checkpoints are downloaded and run locally on first use. Then run:
+Run the test suite:
 
-```powershell
-python twenty_questions_pilot.py --results-file hf_ollama_games.jsonl
+```bash
+python -m unittest discover -s tests -v
 ```
 
-The default cohort has four models, three fixed target concepts, and one game per ordered answerer/guesser pairing (16 pairings; 48 games total). Existing game IDs are skipped when resuming the same output file. Use `--repeats N` for more games per pairing and target, `--model-set additional` for the other configured cohort, or `--smoke-models` to test model loading/generation. Review the runner's `--help` output for all options. These runs consume compute and may download model weights; choose an appropriate GPU and output path before running a larger experiment.
-
-The notebook, `Abstract.ipynb`, contains the two preflight workflows. On Stony Brook's AI3 cluster, follow its access and SLURM guidance and run scripts as scheduled jobs rather than running notebooks on the server.
+Mock results are pipeline checks, not model results. Real inference downloads pinned checkpoints from Hugging Face on first use and runs them locally; no hosted inference API is used.
 
 ## Run on Stony Brook AI3
 
-The cluster provides a CUDA-enabled PyTorch environment as the `pytorch-cuda12` module, including `transformers` and `accelerate`. Create a user-owned environment for the remaining dependency once, on a login node:
+AI3 provides CUDA-enabled PyTorch, Transformers, and Accelerate through the `pytorch-cuda12` module. Set up the user environment once on a login node:
 
 ```bash
 module load pytorch-cuda12
 mkdir -p "$HOME/.venvs"
 python -m venv --system-site-packages "$HOME/.venvs/llmat20qs"
 source "$HOME/.venvs/llmat20qs/bin/activate"
-python -m pip install openai
+python -m pip install -r requirements.txt
+hf auth login
 ```
 
-From the repository root, prepare output directories and submit the example GPU job:
+Accept the Gemma terms and configure Hugging Face access before submitting either job. From the repository root, create output folders and submit the four-model load/generation check:
 
 ```bash
 mkdir -p logs results
+sbatch run_gpu_smoke.job
+```
+
+After the smoke job succeeds, submit the 48-game round robin:
+
+```bash
 sbatch run_pilot.job
 ```
 
-The job requests one GPU, four CPUs, and 30 GB of system memory, samples GPU utilization once per minute, and runs the default 48-game original cohort. Adjust the time and memory requests to cluster policy and measured runtime. Check status with `squeue -u "$USER"` and accounting with `sacct -u "$USER"`. Resubmit with the same results file to resume completed game IDs. The job requires an Ollama-compatible endpoint reachable from the compute node; configure `OLLAMA_BASE_URL` and `OLLAMA_MODEL` if the defaults are not available there. Do not run this GPU job for `--mock` tests.
+`run_pilot.job` pins execution to Tesla1, requests two GPUs (one per player model), and writes to a new cohort-specific file at `results/tesla1-qwen3-8b-gemma3-12b-mistral-nemo-granite33-r1.jsonl`. The runner refuses to mix results from a different cohort, revision, or repeat schedule; rerunning the same job/file resumes completed game IDs. For more repetitions, edit `--repeats` and use a distinct output file.
+
+Check job status with `squeue -u "$USER"` and accounting with `sacct -u "$USER"`. The job scripts sample GPU utilization once per minute and save the log under `logs/`. Do not request GPU resources for mock tests.
 
 ## Preliminary pilot results
 
@@ -58,4 +81,4 @@ These are one-repeat preflights across three fixed targets, not a powered compar
 
 ## Research plan
 
-The planned study will compare all 16 ordered role pairings among four models, including self-play with isolated role histories. It will add a defined target-sampling experiment, information-gain scoring for questions, and independent answer-key evaluation for oracle accuracy. The final model cohort and sample size remain provisional pending compute access, pilot validation, and power analysis. See [the proposal](./project_proposal.md) for the study design and references.
+The planned study compares all 16 ordered role pairings among four models, including self-play with isolated role histories. It adds a defined target-sampling experiment, information-gain scoring for questions, and independent answer-key evaluation for oracle accuracy. See [the proposal](./project_proposal.md) for the study design and references. The proposal's earlier large-model roster is a draft; the currently executable cohort is listed above.
