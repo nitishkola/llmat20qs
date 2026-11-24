@@ -19,64 +19,52 @@ We will play all 16 directed pairings of 4 LLMs, using each model as both guesse
 
 This game is useful because we know the optimal play. For *N* equally likely secrets, a perfect guesser needs approximately log₂ *N* questions. We also know the approximate cost of each lie from the answerer. If the answerer is wrong with fraction ε, it has at most 1 − h(ε) bits per answer. We can compare model behavior with these theoretical optima rather than only with other models.
 
-## Preliminary work
-
-We built a game master that plays 20-turn games between two models. It separates the conversations, retries malformed answers, and logs every turn.
-
-We used this game master to play two round robins of all 16 pairings of 4 small open models on 3 secrets: banana, bicycle, and elephant. We evaluated the logs using the proposed metrics.
-
-| Round robin | Models | Games | Win guesser (95% CI) | Malformed answers |
-|---|---|---:|---|---|
-| A | Qwen3 0.6B, Qwen2.5 1.5B, SmolLM2 1.7B, Llama 3.1 8B | 48 | 2 (4%; 1–14%) | 12.5% |
-| B | Phi-3.5 Mini, Granite 3.3 2B, Qwen2.5 3B, Llama 3.1 8B | 48 | 10 (21%; 12–34%) | 8.5% |
-
-### Findings
-
-- Some answerers provide almost no information. For example, Qwen3 0.6B answered "No" to 99% of questions. This is approximately 0.09 bits per answer, so no guesser could beat this model in an informative search.
-- When guessing, Qwen3 0.6B repeated 92 of its 154 questions word for word.
-- One wrong answer can be decisive. In a hand-labeled game against a pool of 16 candidates, Granite told Llama that an elephant is a "domesticated mammal." After that answer, the correct target became unreachable. Llama guessed farm animals for its final 8 turns.
-- Across 3 hand-labeled games, the models gave 18 correct answers out of 20, for an error rate of 0.10.
-- Most questions are uninformative. Across those games, the average information gain was 0.28 bits per question, compared with an ideal of 1 bit. Fifteen of 24 questions had almost no information gain. For example, "Is it a physical object you can touch?" provided little separation.
-- Random choices are predictable. When asked for a random object 50 times, Llama gave only 17 distinct answers. "Desk lamp" appeared 16 times and "toaster oven" appeared 13 times. In 2,000 simulated uniform draws, we did not see 16 occurrences of the same object. If an opponent knew these favorites, it could exploit them by guessing those two objects first.
-- Different secrets have different difficulty. Guesser could find "bicycle" in 9 of 32 games, but "banana" in only 1 of 32 games.
-- With only 1 game per pairing and secret, the confidence interval for a 12-game secret-specific win rate is approximately ±25 percentage points. We cannot rank models from this pilot, but we have shown that the pipeline works and that its metrics can separate the causes of losing.
-
-These findings set the stage for a larger design with many secrets, repeated games, and a labeled answer key.
-
 ## Approach and evaluation
 
 ### Models
 
-We will use 4 open models of similar size from 4 different developers: Qwen3.8 27B, Gemma 4 31B, GPT-OSS 20B, and Mistral Small 24B.
+The first implementation phase uses four instruction-tuned open-weight checkpoints from four developers. Each is pinned to a Hugging Face revision:
 
-We will use the Stony Brook AI Institute GPU cluster: two nodes with 8 × Tesla V100 GPUs (32 GB each), or Quadro RTX 8000 nodes (48 GB each) when available. Each player may use up to 4 GPUs with 16-bit precision.
+| Model | Checkpoint | Revision |
+|---|---|---|
+| Qwen3 8B | `Qwen/Qwen3-8B` | `b968826d9c46dd6066d109eabc6255188de91218` |
+| Gemma 3 12B IT | `google/gemma-3-12b-it` | `96b6f1eccf38110c56df3a15bffe176da04bfd80` |
+| Mistral Nemo 12B Instruct | `mistralai/Mistral-Nemo-Instruct-2407` | `04d8a90549d23fc6bd7f642064003592df51e9b3` |
+| Granite 3.3 8B Instruct | `ibm-granite/granite-3.3-8b-instruct` | `51dd4bc2ade4059a6bd87649d68aa11e4fb2529b` |
 
-We have a fifth model, Llama 3.3 70B, which we will use only as a judge. All players use the same prompts and settings. We record exact model versions. Since the players are open-weight models, we can also inspect probabilities rather than only generated text.
+This 8B–12B cohort balances the professor's feedback about very small models against the available cluster memory. The models differ in size, architecture, and training, so this is a comparison of model systems, not a causal test of parameter count. Inference uses local Transformers on Quadro RTX 8000 GPUs. Gemma runs in FP32 because its FP16 logits were NaN on V100 and Quadro RTX 8000 hardware; the other three models run in FP16. This mixed precision is a practical compromise for the available GPUs and is a potential confound in comparisons involving Gemma. A pairing uses one GPU per distinct player model. The same role prompts and decoding configuration are used throughout E1. No judge model is included in this E1 implementation.
 
 ### Secrets
 
-We will use a fixed pool of 128 concepts:
+The versioned target manifest contains a project-curated fixed pool of 128 concepts:
 
 - 32 objects
 - 32 animals
 - 32 places
 - 32 famous people
 
-Half will be common concepts and half rare concepts. We will build the pool using WordNet and Wikidata. With 128 secrets, a perfect guesser would need approximately 7 questions.
+There are 32 concepts per category and 16 common / 16 rare concepts within each category. The common/rare labels are operational strata, not measured corpus-frequency estimates. The manifest is informed by the proposal's WordNet/Wikidata source plan. E1 uses the same fixed, stratified subset of 40 concepts in every pairing: 10 per category, with five common and five rare in each. The shared targets allow matched comparisons across model pairings.
 
-## Experiments: 2080 games
+## E1: assigned-secret round robin (initial implementation)
 
-| Experiment | Design | Games |
+E1 includes all 16 directed pairings of four models, including self-play, with 40 assigned-secret games per pairing (640 games total). The answerer and guesser have separate conversation histories. Games stop at a correct guess or after 20 turns. The runner records each turn, model revision, seed, formatting retry, and result in resumable JSONL logs. Cross-play jobs request two GPUs; self-play jobs request one GPU, avoiding an idle allocation.
+
+The initial E1 report includes pairwise win rates, target-clustered 95% bootstrap intervals, paired sign-flip permutation tests of model-role differences with Holm correction, turns used, invalid answers, and invalid moves. E1 does not report factual answer accuracy or question information gain: free-form questions need a reviewed answer key before those metrics are valid. The new implementation and run instructions are in the repository README.
+
+## Follow-up experiments (implemented; pending execution)
+
+| Experiment | Proposed design | Listed games |
 |---|---|---:|
-| E1. Round robin | All 16 pairings × 40 assigned secrets | 640 |
-| E2. Predictable minds | Each model picks a random noun, place, person, or word 100 times; 16 pairings × 20 games | 640 |
-| E2. Self-secret comparison | 4 guessers × 40 games with and without a scouting report of the opponent's favorite picks | 640 |
-| E3. Liar's 20 questions | The game master secretly flips 0, 1, or 2 answers; guesser is warned or not | 500 |
-| E4. Noisy oracle | Each answer is flipped with probability 5%, 10%, or 17% | 300 |
+| E2. Predictable minds | Each model selects 100 secrets from the fixed 128-target pool (25 picks per category); 16 ordered pairings × 40 games, sampling each answerer's picks once and matching targets across guessers | 640 |
+| E2. Self-secret/scouting comparison | 4 self-play pairings × 80 sampled model picks × 2 conditions (no scouting report / top-five favorite-pick report) | 640 |
+| E3. Liar's 20 questions | Qwen3 8B is the fixed answerer; 4 guessers × 0/1/2 scheduled flips × warned/unwarned; 500 games balanced across 24 cells, with 20 or 21 matched games per cell | 500 |
+| E4. Noisy oracle | Qwen3 8B is the fixed answerer; 4 guessers × 5%/10%/17% independent answer-flip probability × 25 games | 300 |
 
-The total is 2,080 games. E1 answers the role and pairing question. E2 tests whether performance against a model's own secret reflects shared selection bias: assigned-secret games should not show the same advantage. E3 and E4 test how guessers respond to wrong answers and compare their behavior with known optima.
+E2 uses model-generated picks constrained to the versioned 128-concept pool so the secret is known to the game and can be compared with a uniform-pick baseline. The pick distribution is descriptive because 100 picks per model provide limited power. Scouting conditions use matched secrets drawn from the same model's pick sample.
 
-The E2 description requires clarification before implementation: an answerer can pick its own secret, or the secret can be assigned from the fixed pool. Scouting-report and no-scouting conditions should be counted separately so that the source of any performance gain is observable.
+In E3 and E4, Qwen3 provides the baseline natural-language Yes/No answers and the game controller applies the assigned corruption. These tests therefore measure resilience to flips on top of Qwen3's own answer behavior, not a gold factual oracle. E3's warning says that some answers may be changed but does not reveal the count or turns. Flip positions are sampled without replacement among the first 20 answer turns; if a game ends early, fewer scheduled flips may be applied, which is recorded. E3's 500 games are allocated as 20 or 21 replicates for each warned/unwarned cell, paired on the same target and flip schedule.
+
+The four follow-up rows total 2,080 games; together with E1's 640 games, the current plan totals 2,720 games. This resolves the former 2,080-game headline and inconsistent E2 row descriptions.
 
 ## Evaluation
 
@@ -90,7 +78,7 @@ The maximum is 1 bit for an even split. We will report mean information gain, wa
 
 ### Answer accuracy
 
-The judge will label every question as Yes or No for all 128 concepts. Disagreements will be resolved by a person. We will hand-check 300 labels.
+For a future answer-key phase, every question can be labeled Yes or No for the candidate concepts, with disagreements resolved by a person and a sample hand-checked. E1 preserves raw questions and answers for that annotation. The judge model and annotation protocol are not part of the current E1 implementation.
 
 For each answerer, we will estimate:
 
@@ -98,11 +86,11 @@ For each answerer, we will estimate:
 - Information capacity 1 − h(ε)
 - The turn on which a wrong answer made the secret unreachable
 
-The 70B Llama judge will score factual labels, while independent human review resolves disagreements.
+The proposed 70B Llama judge and independent human review remain future design choices.
 
 ### Winning
 
-We will report win rates with 95% confidence intervals. Logistic regression will include guesser, answerer, same-model pairing, secret type, and concept category. Unsolved games stop after 20 turns, so survival analysis will supplement the win-rate analysis.
+For E1 we report win rates with target-clustered 95% bootstrap intervals because the same targets are reused across pairings. Future phases can fit models including guesser, answerer, same-model pairing, secret type, and concept category. Unsolved games stop after 20 turns; survival analysis remains a planned follow-up.
 
 ### Randomness
 
