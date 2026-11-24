@@ -4,4 +4,11 @@ __pycache__/
 .env
 .ipynb_checkpoints/
 logs/
-results/
+/data/raw/results/*
+!/data/raw/results/README.md
+/data/interim/*
+!/data/interim/.gitkeep
+/reports/*.summary.json
+/reports/figures/*
+!/reports/figures/.gitkeep
+/models/checkpoints/

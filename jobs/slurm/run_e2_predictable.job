@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=20q-e1-self
+#SBATCH --job-name=20q-e2-predict
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 #SBATCH --time=2-00:00
 #SBATCH --mem=50000
 #SBATCH --cpus-per-task=4
 #SBATCH --nodelist=quadro2
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
@@ -14,10 +14,9 @@ cd "$SLURM_SUBMIT_DIR"
 module load pytorch-cuda12
 source "$HOME/.venvs/llmat20qs/bin/activate"
 
-mkdir -p logs results
-echo "E1 self-play started on $(hostname) at $(date)"
+mkdir -p logs data/raw/results reports
+echo "E2 predictable-minds started on $(hostname) at $(date)"
 nvidia-smi
-python -c 'import torch; assert torch.cuda.is_available(), "Slurm did not expose CUDA"; print(torch.cuda.get_device_name(0))'
 
 GPU_LOG="logs/gpu_usage-${SLURM_JOB_ID}.csv"
 echo "timestamp,gpu_index,utilization_percent,memory_used_MB,memory_total_MB" > "$GPU_LOG"
@@ -31,9 +30,5 @@ echo "timestamp,gpu_index,utilization_percent,memory_used_MB,memory_total_MB" > 
 GPU_MONITOR_PID=$!
 trap 'kill "$GPU_MONITOR_PID" 2>/dev/null || true' EXIT
 
-python e1_experiment.py \
-    --seed 519 \
-    --pairing-group self-play \
-    --results-file results/e1-self-play-r1.jsonl
-
-echo "E1 self-play finished at $(date)"
+python -m src.experiments.followups --experiment predictable --seed 519
+echo "E2 predictable-minds finished at $(date)"

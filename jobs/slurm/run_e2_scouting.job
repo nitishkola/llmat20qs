@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=20q-e4-noisy
+#SBATCH --job-name=20q-e2-scout
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 #SBATCH --time=2-00:00
 #SBATCH --mem=50000
 #SBATCH --cpus-per-task=4
 #SBATCH --nodelist=quadro2
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
@@ -14,8 +14,8 @@ cd "$SLURM_SUBMIT_DIR"
 module load pytorch-cuda12
 source "$HOME/.venvs/llmat20qs/bin/activate"
 
-mkdir -p logs results
-echo "E4 noisy-oracle experiment started on $(hostname) at $(date)"
+mkdir -p logs data/raw/results reports
+echo "E2 self-secret/scouting started on $(hostname) at $(date)"
 nvidia-smi
 
 GPU_LOG="logs/gpu_usage-${SLURM_JOB_ID}.csv"
@@ -30,5 +30,5 @@ echo "timestamp,gpu_index,utilization_percent,memory_used_MB,memory_total_MB" > 
 GPU_MONITOR_PID=$!
 trap 'kill "$GPU_MONITOR_PID" 2>/dev/null || true' EXIT
 
-python followup_experiments.py --experiment noisy --seed 519
-echo "E4 noisy-oracle experiment finished at $(date)"
+python -m src.experiments.followups --experiment scouting --seed 519
+echo "E2 self-secret/scouting finished at $(date)"

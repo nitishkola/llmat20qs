@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import e1_experiment as e1
+from src.experiments import e1
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -198,7 +198,9 @@ class E1ExperimentTests(unittest.TestCase):
             self.assertEqual(len(role["answerer_target_clustered_95_ci"]), 2)
         with tempfile.TemporaryDirectory() as temporary_directory:
             results_path = Path(temporary_directory) / "e1.jsonl"
-            summary_file = e1.write_summary(summary, results_path)
+            summary_file = e1.write_summary(
+                summary, results_path, Path(temporary_directory) / "reports"
+            )
             saved = json.loads(summary_file.read_text(encoding="utf-8"))
             self.assertEqual(saved["games"], 640)
 
@@ -251,7 +253,8 @@ class E1ExperimentTests(unittest.TestCase):
             output = Path(temporary_directory) / "partial.jsonl"
             command = [
                 sys.executable,
-                str(ROOT / "e1_experiment.py"),
+                "-m",
+                "src.experiments.e1",
                 "--mock",
                 "--max-games",
                 "2",

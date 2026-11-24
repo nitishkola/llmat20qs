@@ -6,8 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-import e1_experiment as e1
-import followup_experiments as followups
+from src.experiments import e1, followups
 
 
 class ScriptedBackend:

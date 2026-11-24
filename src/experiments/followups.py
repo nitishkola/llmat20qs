@@ -14,11 +14,12 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import e1_experiment as e1
+from src.data.paths import PROJECT_ROOT, RESULTS_DIR
+from src.experiments import e1
 
 
-ROOT = Path(__file__).resolve().parent
-DEFAULT_RESULTS = ROOT / "results"
+ROOT = PROJECT_ROOT
+DEFAULT_RESULTS = RESULTS_DIR
 PICK_ATTEMPTS_PER_MODEL = 100
 PICK_RETRIES = 3
 PREDICTABLE_GAMES_PER_PAIR = 40
@@ -828,7 +829,8 @@ def summarize_games(records: list[dict]) -> dict:
 
 
 def _write_summary(path: Path, summary: dict) -> Path:
-    destination = path.with_suffix(".summary.json")
+    destination = ROOT / "reports" / path.with_suffix(".summary.json").name
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",

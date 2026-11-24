@@ -19,10 +19,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
+from src.data.paths import PROJECT_ROOT, RESULTS_DIR, TARGET_MANIFEST
+from src.models.registry import MODELS, ModelConfig
 
-ROOT = Path(__file__).resolve().parent
-DEFAULT_TARGETS = ROOT / "data" / "target_pool_v1.json"
-DEFAULT_RESULTS = ROOT / "results" / "e1_round_robin.jsonl"
+ROOT = PROJECT_ROOT
+DEFAULT_TARGETS = TARGET_MANIFEST
+DEFAULT_RESULTS = RESULTS_DIR / "e1_round_robin.jsonl"
 MAX_TURNS = 20
 MAX_FORMAT_ATTEMPTS = 3
 BOOTSTRAP_REPLICATES = 2000
@@ -35,45 +37,7 @@ GENERATION_CONFIG = {
     "top_p": 0.9,
     "max_new_tokens": 128,
 }
-@dataclass(frozen=True)
-class ModelConfig:
-    key: str
-    name: str
-    model_id: str
-    revision: str
-    inference_dtype: str
 
-
-MODELS = (
-    ModelConfig(
-        "qwen3-8b",
-        "Qwen3 8B",
-        "Qwen/Qwen3-8B",
-        "b968826d9c46dd6066d109eabc6255188de91218",
-        "float16",
-    ),
-    ModelConfig(
-        "gemma3-12b-it",
-        "Gemma 3 12B IT",
-        "google/gemma-3-12b-it",
-        "96b6f1eccf38110c56df3a15bffe176da04bfd80",
-        "float32",
-    ),
-    ModelConfig(
-        "mistral-nemo-12b",
-        "Mistral Nemo 12B Instruct",
-        "mistralai/Mistral-Nemo-Instruct-2407",
-        "04d8a90549d23fc6bd7f642064003592df51e9b3",
-        "float16",
-    ),
-    ModelConfig(
-        "granite-3.3-8b",
-        "Granite 3.3 8B Instruct",
-        "ibm-granite/granite-3.3-8b-instruct",
-        "51dd4bc2ade4059a6bd87649d68aa11e4fb2529b",
-        "float16",
-    ),
-)
 
 RUN_CONFIG = {
     "prompt_version": PROMPT_VERSION,
@@ -1039,14 +1003,21 @@ def print_summary(summary: dict) -> None:
     print(f"\n{summary['interpretation_note']}")
 
 
-def summary_path(results_path: Path) -> Path:
-    if results_path.suffix == ".jsonl":
-        return results_path.with_suffix(".summary.json")
-    return Path(f"{results_path}.summary.json")
+def summary_path(results_path: Path, reports_dir: Path = ROOT / "reports") -> Path:
+    filename = (
+        f"{results_path.stem}.summary.json"
+        if results_path.suffix == ".jsonl"
+        else f"{results_path.name}.summary.json"
+    )
+    return reports_dir / filename
 
 
-def write_summary(summary: dict, results_path: Path) -> Path:
-    destination = summary_path(results_path)
+def write_summary(
+    summary: dict,
+    results_path: Path,
+    reports_dir: Path = ROOT / "reports",
+) -> Path:
+    destination = summary_path(results_path, reports_dir)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
