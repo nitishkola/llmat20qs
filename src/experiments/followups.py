@@ -631,6 +631,7 @@ def play_followup_game(
                 "answer_status": "invalid",
                 "raw_answers": raw_answers,
                 "format_retries": max(0, len(raw_answers) - 1),
+                "raw_moves": raw_moves,
             })
             guesser_messages.append({
                 "role": "user",
@@ -656,6 +657,8 @@ def play_followup_game(
             "answer_status": "valid",
             "raw_answers": raw_answers,
             "format_retries": max(0, len(raw_answers) - 1),
+            # Guesser attempts for this turn, including any rejected retries.
+            "raw_moves": raw_moves,
         })
         guesser_messages.append({"role": "user", "content": delivered_answer})
 

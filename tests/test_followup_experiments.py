@@ -208,6 +208,30 @@ class FollowupExperimentTests(unittest.TestCase):
         self.assertEqual([t["correct"] for t in record["turns"]], [False, True])
         self.assertEqual(record["run_config"]["guess_rule"], e1.GUESS_RULE_VERSION)
 
+    def test_question_turn_logs_rejected_guesser_attempts(self):
+        plan = next(
+            plan for plan in followups.build_noisy_schedule(self.targets, 519)
+            if plan.guesser.key == "granite-3.3-8b"
+        )
+        plan = replace(plan, condition={**plan.condition, "flip_probability": 0.0})
+
+        class RetryThenAsk(ScriptedBackend):
+            def generate(self, model, messages, seed):
+                if model.key == self.plan.guesser.key:
+                    self.guesser_calls += 1
+                    if self.guesser_calls == 1:
+                        return e1.Generation("GUESS: spaceship", 0.001)
+                    if self.guesser_calls == 2:
+                        return e1.Generation("QUESTION: Is it a living thing?", 0.001)
+                    return e1.Generation(f"GUESS: {self.target.name}", 0.001)
+                return e1.Generation("Yes", 0.001)
+
+        record = followups.play_followup_game(plan, self.targets, RetryThenAsk(plan, plan.target))
+        question = record["turns"][0]
+        self.assertEqual(question["type"], "question")
+        self.assertEqual([m["text"] for m in question["raw_moves"]],
+                         ["GUESS: spaceship", "QUESTION: Is it a living thing?"])
+
     def test_resume_rejects_records_from_old_guess_rule(self):
         schedule = followups.build_noisy_schedule(self.targets, 519)
         plan = schedule[0]
