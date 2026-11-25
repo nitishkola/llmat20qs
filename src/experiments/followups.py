@@ -486,16 +486,18 @@ def _game_messages(
             f"concepts in prior random-pick trials: {favorites}. This is only a tendency, "
             "not a guarantee about the current secret."
         )
-    guesser_messages = [
-        {"role": "system", "content": guesser_system},
-        {
-            "role": "user",
-            "content": "I am thinking of one of those concepts. Ask your first question.",
-        },
-    ]
     warning = plan.condition.get("warning_text")
     if warning:
-        guesser_messages.append({"role": "user", "content": warning})
+        first_prompt = (
+            "I am thinking of one of those concepts. Ask your first question.\n\n"
+            f"{warning}"
+        )
+    else:
+        first_prompt = "I am thinking of one of those concepts. Ask your first question."
+    guesser_messages = [
+        {"role": "system", "content": guesser_system},
+        {"role": "user", "content": first_prompt},
+    ]
     return answerer_messages, guesser_messages
 
 

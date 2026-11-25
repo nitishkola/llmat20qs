@@ -117,6 +117,16 @@ class FollowupExperimentTests(unittest.TestCase):
         self.assertEqual(sum(counts.values()), 500)
         self.assertEqual(set(counts.values()), {40, 42})
 
+    def test_warned_game_keeps_gemma_chat_roles_alternating(self):
+        plan = next(
+            plan for plan in followups.build_liar_schedule(self.targets, 519)
+            if plan.guesser.key == "gemma3-12b-it" and plan.condition["warned"]
+        )
+        _, messages = followups._game_messages(plan, self.targets)
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        self.assertIn("I am thinking of one of those concepts", messages[1]["content"])
+        self.assertIn(plan.condition["warning_text"], messages[1]["content"])
+
     def test_noisy_schedule_has_300_games_and_matched_targets_by_rep(self):
         schedule = followups.build_noisy_schedule(self.targets, 519)
         self.assertEqual(len(schedule), 300)
