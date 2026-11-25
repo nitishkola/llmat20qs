@@ -186,6 +186,57 @@ class FollowupExperimentTests(unittest.TestCase):
         self.assertNotEqual(answer_turn["truthful_answer"], answer_turn["answer"])
         self.assertEqual(record["applied_flips"], 1)
 
+    def test_wrong_listed_guess_spends_a_turn_in_followups(self):
+        plan = next(
+            plan for plan in followups.build_noisy_schedule(self.targets, 519)
+            if plan.guesser.key == "qwen3-8b"
+        )
+        other = next(target for target in self.targets if target.id != plan.target.id)
+
+        class WrongThenRight(ScriptedBackend):
+            def generate(self, model, messages, seed):
+                if model.key == self.plan.guesser.key:
+                    self.guesser_calls += 1
+                    name = other.name if self.guesser_calls == 1 else self.target.name
+                    return e1.Generation(f"GUESS: {name}", 0.001)
+                return e1.Generation("Yes", 0.001)
+
+        record = followups.play_followup_game(plan, self.targets, WrongThenRight(plan, plan.target))
+        self.assertTrue(record["won"])
+        self.assertEqual(record["turns_used"], 2)
+        self.assertEqual(record["invalid_moves"], 0)
+        self.assertEqual([t["correct"] for t in record["turns"]], [False, True])
+        self.assertEqual(record["run_config"]["guess_rule"], e1.GUESS_RULE_VERSION)
+
+    def test_guesser_feedback_reports_turns_left(self):
+        plan = next(
+            plan for plan in followups.build_noisy_schedule(self.targets, 519)
+            if plan.guesser.key == "gemma3-12b-it"
+        )
+        seen = []
+
+        class Recording(ScriptedBackend):
+            def generate(self, model, messages, seed):
+                if model.key == self.plan.guesser.key:
+                    seen.append(messages[-1]["content"])
+                return super().generate(model, messages, seed)
+
+        followups.play_followup_game(plan, self.targets, Recording(plan, plan.target))
+        self.assertTrue(seen[1].endswith("(19 turns left.)"))
+        self.assertEqual(e1.turns_left_note(19), " (1 turn left.)")
+
+    def test_resume_rejects_records_from_old_guess_rule(self):
+        schedule = followups.build_noisy_schedule(self.targets, 519)
+        plan = schedule[0]
+        record = followups.play_followup_game(plan, self.targets, ScriptedBackend(plan, plan.target))
+        record["inference_mode"] = "transformers"
+        record["run_config"].pop("guess_rule")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "old.jsonl"
+            path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(followups.FollowupError, "older guess rule"):
+                followups._read_existing_games(path, plan.experiment, schedule)
+
     def test_pick_validation_rejects_category_mismatch(self):
         picks = make_picks(self.targets)
         picks[0]["category"] = "place"

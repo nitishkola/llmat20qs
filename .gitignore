@@ -12,3 +12,5 @@ logs/
 /reports/figures/*
 !/reports/figures/.gitkeep
 /models/checkpoints/
+/archive/guess-bug-v1/results/
+/archive/guess-bug-v1/reports/

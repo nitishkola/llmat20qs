@@ -515,6 +515,7 @@ def play_followup_game(
     backend: e1.Backend,
 ) -> dict:
     accepted = {e1.normalize(name) for name in plan.target.accepted_names}
+    listed = e1.candidate_names(targets)
     answerer_messages, guesser_messages = _game_messages(plan, targets)
     turns: list[dict] = []
     invalid_answers = 0
@@ -545,7 +546,7 @@ def play_followup_game(
             parsed_move = e1.parse_move(generation.text)
             if parsed_move:
                 kind, body = parsed_move
-                if kind == "GUESS" and e1.normalize(body) not in accepted:
+                if kind == "GUESS" and e1.normalize(body) not in listed:
                     parsed_move = None
                 else:
                     break
@@ -569,7 +570,8 @@ def play_followup_game(
             })
             guesser_messages.append({
                 "role": "user",
-                "content": "Invalid move; this turn is spent. Continue with the next turn.",
+                "content": "Invalid move; this turn is spent. Continue with the next turn."
+                + e1.turns_left_note(turn_number),
             })
             continue
 
@@ -588,7 +590,8 @@ def play_followup_game(
                 break
             guesser_messages.append({
                 "role": "user",
-                "content": f"No, the secret is not {body}. Ask another question or guess.",
+                "content": f"No, the secret is not {body}. Ask another question or guess."
+                + e1.turns_left_note(turn_number),
             })
             continue
 
@@ -633,7 +636,8 @@ def play_followup_game(
             })
             guesser_messages.append({
                 "role": "user",
-                "content": "The answerer gave no valid Yes/No answer; this turn is spent.",
+                "content": "The answerer gave no valid Yes/No answer; this turn is spent."
+                + e1.turns_left_note(turn_number),
             })
             continue
 
@@ -656,7 +660,10 @@ def play_followup_game(
             "raw_answers": raw_answers,
             "format_retries": max(0, len(raw_answers) - 1),
         })
-        guesser_messages.append({"role": "user", "content": delivered_answer})
+        guesser_messages.append({
+            "role": "user",
+            "content": delivered_answer + e1.turns_left_note(turn_number),
+        })
 
     return {
         "schema_version": 1,
@@ -717,6 +724,11 @@ def _read_existing_games(
             or record.get("randomization_id") != plan.randomization_id
         ):
             raise FollowupError(f"Schedule metadata mismatch in {path} for {game_id}.")
+        if record.get("run_config", {}).get("guess_rule") != e1.GUESS_RULE_VERSION:
+            raise FollowupError(
+                f"{game_id} in {path} was recorded under an older guess rule; move the "
+                "old results file aside and start a new one."
+            )
         by_id[game_id] = record
     return by_id
 
