@@ -30,8 +30,9 @@ MAX_FORMAT_ATTEMPTS = 3
 BOOTSTRAP_REPLICATES = 2000
 PERMUTATION_REPLICATES = 10000
 CATEGORIES = ("object", "animal", "place", "person")
-# v2: guesser feedback ends with the number of turns left.
-PROMPT_VERSION = "e1-prompts-v2"
+# Prompts are unchanged from the first run. A turns-left reminder (v2) was tried
+# and dropped: it made Gemma delay guessing until the final turn.
+PROMPT_VERSION = "e1-prompts-v1"
 GENERATION_CONFIG = {
     "do_sample": True,
     "temperature": 0.7,
@@ -631,12 +632,6 @@ def render_guesser_system(targets: list[Target]) -> str:
     )
 
 
-def turns_left_note(turn_number: int) -> str:
-    """Suffix for guesser feedback after ``turn_number`` turns have been used."""
-    left = MAX_TURNS - turn_number
-    return f" ({left} turn{'s' if left != 1 else ''} left.)"
-
-
 def candidate_names(targets: list[Target]) -> set[str]:
     """Normalized accepted names of every candidate a guesser may name."""
     return {normalize(name) for target in targets for name in target.accepted_names}
@@ -738,8 +733,7 @@ def play_game(
             })
             guesser_messages.append({
                 "role": "user",
-                "content": "Invalid move; this turn is spent. Continue with the next turn."
-                + turns_left_note(turn_number),
+                "content": "Invalid move; this turn is spent. Continue with the next turn.",
             })
             continue
 
@@ -758,8 +752,7 @@ def play_game(
                 break
             guesser_messages.append({
                 "role": "user",
-                "content": f"No, the secret is not {body}. Ask another question or guess."
-                + turns_left_note(turn_number),
+                "content": f"No, the secret is not {body}. Ask another question or guess.",
             })
             continue
 
@@ -804,8 +797,7 @@ def play_game(
             })
             guesser_messages.append({
                 "role": "user",
-                "content": "The answerer gave no valid Yes/No answer; this turn is spent."
-                + turns_left_note(turn_number),
+                "content": "The answerer gave no valid Yes/No answer; this turn is spent.",
             })
             continue
 
@@ -818,7 +810,7 @@ def play_game(
             "raw_answers": raw_answers,
             "format_retries": max(0, len(raw_answers) - 1),
         })
-        guesser_messages.append({"role": "user", "content": answer + turns_left_note(turn_number)})
+        guesser_messages.append({"role": "user", "content": answer})
 
     return {
         "schema_version": 1,
@@ -899,9 +891,13 @@ def validate_records(
             raise ExperimentError(f"Model, seed, or target metadata mismatch for {game_id}.")
         if record.get("schema_version") != 1 or record.get("experiment") != "E1":
             raise ExperimentError(f"Unsupported result schema for {game_id}.")
-        if record.get("run_config", {}).get("guess_rule") != GUESS_RULE_VERSION:
+        run_config = record.get("run_config", {})
+        if (
+            run_config.get("guess_rule") != GUESS_RULE_VERSION
+            or run_config.get("prompt_version") != PROMPT_VERSION
+        ):
             raise ExperimentError(
-                f"{game_id} was recorded under an older guess rule; move the old results "
+                f"{game_id} was recorded under a different guess rule or prompt version; move the old results "
                 "file aside and start a new one."
             )
         inference_mode = record.get("inference_mode")

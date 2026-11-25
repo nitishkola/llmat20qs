@@ -23,6 +23,10 @@ QUESTION_BANK = TARGET_MANIFEST.with_name("e5_question_bank_v1.json")
 DEFAULT_RESULTS = RESULTS_DIR
 MAX_TURNS = e1.MAX_TURNS
 EXPERIMENT = "E5_exact_information"
+# Each turn sends only the system prompt and the current state prompt, which
+# already lists every previous answer. Accumulating full state prompts across
+# turns ran Gemma 3 (float32, ~45 GiB weights) out of GPU memory.
+DIALOGUE = "current-state-only-v2"
 QUESTION_ACTION = re.compile(r"^\s*QUESTION\s*:\s*(Q\d+)\s*$", re.IGNORECASE)
 GUESS_ACTION = re.compile(r"^\s*GUESS\s*:\s*(.+?)\s*$", re.IGNORECASE)
 
@@ -221,7 +225,7 @@ def play_game(
     if plan.target.id not in candidates:
         raise InformationExperimentError(f"Target {plan.target.id} is outside the E5 set.")
 
-    messages = [{"role": "system", "content": _system_prompt()}]
+    system_message = {"role": "system", "content": _system_prompt()}
     history = []
     asked: set[str] = set()
     turns = []
@@ -242,7 +246,7 @@ def play_game(
         prompt = _state_prompt(
             candidates, choices, target_by_id, history, turn_number
         )
-        messages.append({"role": "user", "content": prompt})
+        messages = [system_message, {"role": "user", "content": prompt}]
         raw_responses = []
         parsed = None
         for attempt in range(e1.MAX_FORMAT_ATTEMPTS):
@@ -346,6 +350,7 @@ def play_game(
             **e1.RUN_CONFIG,
             "max_turns": MAX_TURNS,
             "oracle": "deterministic binary labels from e5-exact-information-v1",
+            "dialogue": DIALOGUE,
         },
         "runtime": backend.metadata() if hasattr(backend, "metadata") else {
             "inference_mode": getattr(backend, "mode", "real")
@@ -470,6 +475,11 @@ def _read_existing(path: Path, schedule: list[GamePlan]) -> dict[str, dict]:
                     f"Malformed JSON in {path} line {line_number}: {error}."
                 ) from error
             game_id = record.get("game_id")
+            if record.get("run_config", {}).get("dialogue") != DIALOGUE:
+                raise InformationExperimentError(
+                    f"{path} line {line_number} uses an older dialogue protocol; move the "
+                    "old results file aside and start a new one."
+                )
             if record.get("experiment") != EXPERIMENT or game_id not in scheduled:
                 raise InformationExperimentError(
                     f"Unexpected E5 record in {path} line {line_number}."

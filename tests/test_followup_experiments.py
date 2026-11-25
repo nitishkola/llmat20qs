@@ -208,23 +208,6 @@ class FollowupExperimentTests(unittest.TestCase):
         self.assertEqual([t["correct"] for t in record["turns"]], [False, True])
         self.assertEqual(record["run_config"]["guess_rule"], e1.GUESS_RULE_VERSION)
 
-    def test_guesser_feedback_reports_turns_left(self):
-        plan = next(
-            plan for plan in followups.build_noisy_schedule(self.targets, 519)
-            if plan.guesser.key == "gemma3-12b-it"
-        )
-        seen = []
-
-        class Recording(ScriptedBackend):
-            def generate(self, model, messages, seed):
-                if model.key == self.plan.guesser.key:
-                    seen.append(messages[-1]["content"])
-                return super().generate(model, messages, seed)
-
-        followups.play_followup_game(plan, self.targets, Recording(plan, plan.target))
-        self.assertTrue(seen[1].endswith("(19 turns left.)"))
-        self.assertEqual(e1.turns_left_note(19), " (1 turn left.)")
-
     def test_resume_rejects_records_from_old_guess_rule(self):
         schedule = followups.build_noisy_schedule(self.targets, 519)
         plan = schedule[0]
@@ -234,7 +217,7 @@ class FollowupExperimentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "old.jsonl"
             path.write_text(json.dumps(record) + "\n", encoding="utf-8")
-            with self.assertRaisesRegex(followups.FollowupError, "older guess rule"):
+            with self.assertRaisesRegex(followups.FollowupError, "different guess rule"):
                 followups._read_existing_games(path, plan.experiment, schedule)
 
     def test_pick_validation_rejects_category_mismatch(self):

@@ -5,7 +5,7 @@
 #SBATCH --time=00-01:00
 #SBATCH --mem=16000
 #SBATCH --cpus-per-task=4
-#SBATCH --nodelist=quadro2
+#SBATCH --exclude=tesla1,tesla2,h100,orion
 #SBATCH --gres=gpu:2
 
 set -euo pipefail

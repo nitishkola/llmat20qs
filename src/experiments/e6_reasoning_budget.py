@@ -388,6 +388,11 @@ def read_existing(path: Path, schedule: list[GamePlan]) -> dict[str, dict]:
             game_id = record.get("game_id")
             if record.get("experiment") != EXPERIMENT or game_id not in scheduled:
                 raise ReasoningExperimentError(f"Unexpected E6 record in {path} line {line_number}.")
+            if record.get("run_config", {}).get("dialogue") != e5.DIALOGUE:
+                raise ReasoningExperimentError(
+                    f"{path} line {line_number} uses an older dialogue protocol; move the "
+                    "old results file aside and start a new one."
+                )
             if game_id in existing:
                 raise ReasoningExperimentError(f"Duplicate E6 game ID {game_id} in {path}.")
             existing[game_id] = record

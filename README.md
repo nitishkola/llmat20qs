@@ -49,16 +49,18 @@ cache and are not stored in the repository.
   the turn.
 - A guess that names any listed candidate is a scored move: it spends a turn,
   and a wrong guess is answered "No, the secret is not X." Only guesses outside
-  the candidate list are treated as formatting errors. Every message to the
-  guesser ends with the number of turns left (prompt version `e1-prompts-v2`).
+  the candidate list are treated as formatting errors.
 - **Protocol revision (2026-11-25).** The first E1–E4 runs retried wrong
   guesses as formatting errors, which gave free guesses and leaked feedback;
   about half of Qwen3 8B's wins depended on it. Those logs are kept in
   [`archive/guess-bug-v1/`](./archive/guess-bug-v1/) and are not valid. E1–E4
-  are being re-run under `guess_rule = listed-candidate-guess-spends-turn-v2`,
-  and the runners refuse to resume from older records. The turns-left reminder
-  was added at the same time because Gemma 3 never committed to a guess among
-  128 candidates in the first follow-up runs.
+  are re-run under `guess_rule = listed-candidate-guess-spends-turn-v2` with
+  unchanged prompts (`e1-prompts-v1`); the runners refuse to resume from records
+  with a different rule or prompt version. A turns-left reminder was briefly
+  tried and dropped because it made Gemma 3 delay guessing until the last turn
+  (see [`archive/aborted-2026-11-25/`](./archive/aborted-2026-11-25/)). Because
+  prompts and seeds are unchanged, Gemma's and Mistral's re-run E1 games (which
+  the bug never touched) should closely reproduce v1.
 
 Pairing comparisons are matched by secret. The E1 report includes win rates,
 target-clustered 95% bootstrap intervals, paired sign-flip tests with Holm

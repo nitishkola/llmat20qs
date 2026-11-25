@@ -92,6 +92,24 @@ class ExactInformationTests(unittest.TestCase):
         self.assertGreater(question_turn["expected_information_gain_bits"], 0)
         self.assertEqual(record["turns"][1]["action"], "guess")
 
+    def test_each_turn_sends_only_system_and_current_state(self):
+        target = next(target for target in self.targets if target.id == "object-chair")
+        plan = e5.GamePlan("test-game", 519, e1.MODELS[0], target)
+        seen = []
+
+        class Recording(ScriptedBackend):
+            def generate(self, model, messages, seed):
+                seen.append([message["role"] for message in messages])
+                return super().generate(model, messages, seed)
+
+        backend = Recording(["QUESTION: Q01", "nonsense", f"GUESS: {target.name}"])
+        record = e5.play_game(plan, self.targets, self.questions, backend)
+        self.assertTrue(record["won"])
+        self.assertEqual(record["run_config"]["dialogue"], e5.DIALOGUE)
+        self.assertEqual(seen[0], ["system", "user"])
+        self.assertEqual(seen[1], ["system", "user"])  # fresh context on turn 2
+        self.assertEqual(seen[2], ["system", "user", "assistant", "user"])  # in-turn retry
+
     def test_greedy_baseline_identifies_every_target_within_turn_limit(self):
         for target in self.targets:
             result = e5.simulate_baseline(
